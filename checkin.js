@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 // 解密算法常量
@@ -6,8 +7,22 @@ const HP = 16, q8_AES128 = 16, WP = HP, rh = 64, Rv = 32, VP = 64, Em = 6;
 const ure = Uint8Array.from([82,9,106,213,48,54,165,56,191,64,163,158,129,243,215,251,124,227,57,130,155,47,255,135,52,142,67,68,196,222,233,203,84,123,148,50,166,194,35,61,238,76,149,11,66,250,195,78,8,46,161,102,40,217,36,178,118,91,162,73,109,139,209,37]);
 const dre = Uint8Array.from([31,221,168,51,136,7,199,49,177,18,16,89,39,128,236,95,96,81,127,169,25,181,74,13,45,229,122,159,147,201,156,239,160,224,59,77,174,42,245,176,200,235,187,60,131,83,153,97,23,43,4,126,186,119,214,38,225,105,20,99,85,33,12,125]);
 
+/**
+ * 兼容不同 Node.js / Electron 版本的 WebCrypto Subtle 接口获取
+ */
+function getSubtleCrypto() {
+  if (typeof crypto !== 'undefined' && crypto.subtle) return crypto.subtle;
+  if (typeof crypto !== 'undefined' && crypto.webcrypto && crypto.webcrypto.subtle) return crypto.webcrypto.subtle;
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) return globalThis.crypto.subtle;
+  return null;
+}
+
 async function sha512(data) {
-  const h = await crypto.subtle.digest('SHA-512', data);
+  const subtle = getSubtleCrypto();
+  if (!subtle) {
+    throw new Error('当前环境缺少 WebCrypto / subtle 模块支持，请确保使用 Node.js 18+ 或使用内置 Trae 运行时。');
+  }
+  const h = await subtle.digest('SHA-512', data);
   return new Uint8Array(h);
 }
 
@@ -21,6 +36,10 @@ function xorArrays(a, b, n) {
  * 解密 storage.json 中的凭据信息
  */
 async function decrypt(b64) {
+  const subtle = getSubtleCrypto();
+  if (!subtle) {
+    throw new Error('当前环境缺少 WebCrypto / subtle 模块支持，请确保使用 Node.js 18+ 或使用内置 Trae 运行时。');
+  }
   const t = new Uint8Array(Buffer.from(b64, 'base64'));
   const key = t.slice(Em, Em + Rv);
   const sha = await sha512(key);
@@ -32,8 +51,8 @@ async function decrypt(b64) {
   const aesKey = hash.slice(0, q8_AES128);
   const iv = hash.slice(q8_AES128, q8_AES128 + WP);
   const ct = t.slice(Rv + Em);
-  const ck = await crypto.subtle.importKey('raw', aesKey, { name: 'AES-CBC' }, false, ['decrypt']);
-  const dec = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, ck, ct));
+  const ck = await subtle.importKey('raw', aesKey, { name: 'AES-CBC' }, false, ['decrypt']);
+  const dec = new Uint8Array(await subtle.decrypt({ name: 'AES-CBC', iv }, ck, ct));
   return new TextDecoder().decode(dec.slice(rh));
 }
 
@@ -45,27 +64,42 @@ function sleep(ms) {
 }
 
 /**
+ * 获取各操作系统的应用配置根目录
+ */
+function getBaseConfigDir() {
+  if (process.platform === 'win32') {
+    return process.env.APPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Roaming') : null);
+  } else if (process.platform === 'darwin') {
+    return process.env.HOME ? path.join(process.env.HOME, 'Library', 'Application Support') : null;
+  } else {
+    return process.env.XDG_CONFIG_HOME || (process.env.HOME ? path.join(process.env.HOME, '.config') : null);
+  }
+}
+
+/**
  * 自动定位有效的 storage.json 路径
  */
 function findStorageFile() {
-  const appData = process.env.APPDATA;
-  if (!appData) {
-    throw new Error('未检测到 APPDATA 环境变量');
+  const baseDir = getBaseConfigDir();
+  if (!baseDir) {
+    throw new Error('未检测到用户配置目录环境变量（APPDATA 或 HOME）');
   }
 
-  // 动态自动扫描 APPDATA 目录下所有匹配 *trae* 的应用目录
+  // 动态自动扫描配置目录下所有匹配 *trae* 的应用目录
   let candidateDirs = [];
   try {
-    const entries = fs.readdirSync(appData, { withFileTypes: true });
-    candidateDirs = entries
-      .filter(e => e.isDirectory() && e.name.toLowerCase().includes('trae'))
-      .map(e => e.name);
+    if (fs.existsSync(baseDir)) {
+      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+      candidateDirs = entries
+        .filter(e => e.isDirectory() && e.name.toLowerCase().includes('trae'))
+        .map(e => e.name);
+    }
   } catch (e) {
     candidateDirs = [];
   }
 
   // 兜底保障常见命名目录
-  const defaultDirs = ['Trae CN', 'TRAE SOLO CN', 'Trae', 'Trae%20CN'];
+  const defaultDirs = ['Trae CN', 'TRAE SOLO CN', 'Trae', 'Trae%20CN', 'TraeCode CN', 'TraeCode'];
   for (const d of defaultDirs) {
     if (!candidateDirs.includes(d)) candidateDirs.push(d);
   }
@@ -73,7 +107,7 @@ function findStorageFile() {
   const candidates = [];
 
   for (const dir of candidateDirs) {
-    const filePath = `${appData}\\${dir}\\User\\globalStorage\\storage.json`;
+    const filePath = path.join(baseDir, dir, 'User', 'globalStorage', 'storage.json');
     if (fs.existsSync(filePath)) {
       try {
         const content = fs.readFileSync(filePath, 'utf8');
@@ -92,7 +126,7 @@ function findStorageFile() {
     throw new Error(
       `未在计算机中检测到任何有效的 Trae 登录凭据。\n` +
       `已扫描目录（包含 trae 的路径）：\n` +
-      candidateDirs.map(d => `  - ${appData}\\${d}`).join('\n') +
+      candidateDirs.map(d => `  - ${path.join(baseDir, d)}`).join('\n') +
       `\n请先打开并登录 Trae / TraeWork 客户端后再运行本程序。`
     );
   }
@@ -106,9 +140,17 @@ function findStorageFile() {
  * 发送带重试机制的 HTTP 请求
  */
 async function fetchWithRetry(url, options, maxRetries = 5) {
+  const fetchFn = typeof fetch === 'function' ? fetch : (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function' ? globalThis.fetch : null);
+  if (!fetchFn) {
+    throw new Error('当前环境缺少原生 fetch 支持，请使用 Node.js 18+ 或通过 run_checkin.cmd 运行内置 Trae 运行时。');
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetch(url, options);
+      // 15 秒请求超时保护，避免网络堵塞导致进程永久挂起
+      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined;
+      const requestOptions = signal ? { ...options, signal } : options;
+      const res = await fetchFn(url, requestOptions);
       if (res.status === 429 || res.status >= 500) {
         throw new Error(`HTTP 状态码异常: ${res.status}`);
       }
@@ -249,7 +291,7 @@ async function main() {
 
 function writeLog(text) {
   try {
-    const logFile = `${__dirname}\\checkin.log`;
+    const logFile = path.join(__dirname, 'checkin.log');
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -260,39 +302,45 @@ function writeLog(text) {
 }
 
 /**
- * 在屏幕右下角弹出 Windows 原生消息通知
+ * 弹出跨平台原生桌面消息通知（Windows / macOS / Linux）
  */
 function showNotification(title, message) {
   try {
     const { execFile } = require('child_process');
-    // 清洗字符，防止换行和特殊字符破坏 PowerShell 脚本
+    // 清洗字符，防止换行和特殊字符破坏脚本参数
     const cleanTitle = String(title).replace(/["`$]/g, '').replace(/\r?\n/g, ' ');
     const cleanMsg = String(message).replace(/["`$]/g, '').replace(/\r?\n/g, ' ');
 
-    const psCommand = `
-      try {
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-        $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-        $textNodes = $template.GetElementsByTagName("text")
-        $textNodes.Item(0).AppendChild($template.CreateTextNode("${cleanTitle}")) > $null
-        $textNodes.Item(1).AppendChild($template.CreateTextNode("${cleanMsg}")) > $null
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TraeWork")
-        $notification = [Windows.UI.Notifications.ToastNotification]::new($template)
-        $notifier.Show($notification)
-      } catch {
-        Add-Type -AssemblyName System.Windows.Forms
-        $n = New-Object System.Windows.Forms.NotifyIcon
-        $n.Icon = [System.Drawing.SystemIcons]::Information
-        $n.BalloonTipTitle = "${cleanTitle}"
-        $n.BalloonTipText = "${cleanMsg}"
-        $n.Visible = $true
-        $n.ShowBalloonTip(4000)
-        Start-Sleep -Seconds 1
-        $n.Dispose()
-      }
-    `;
+    if (process.platform === 'win32') {
+      const psCommand = `
+        try {
+          [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+          $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+          $textNodes = $template.GetElementsByTagName("text")
+          $textNodes.Item(0).AppendChild($template.CreateTextNode("${cleanTitle}")) > $null
+          $textNodes.Item(1).AppendChild($template.CreateTextNode("${cleanMsg}")) > $null
+          $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TraeWork")
+          $notification = [Windows.UI.Notifications.ToastNotification]::new($template)
+          $notifier.Show($notification)
+        } catch {
+          Add-Type -AssemblyName System.Windows.Forms
+          $n = New-Object System.Windows.Forms.NotifyIcon
+          $n.Icon = [System.Drawing.SystemIcons]::Information
+          $n.BalloonTipTitle = "${cleanTitle}"
+          $n.BalloonTipText = "${cleanMsg}"
+          $n.Visible = $true
+          $n.ShowBalloonTip(4000)
+          Start-Sleep -Seconds 1
+          $n.Dispose()
+        }
+      `;
 
-    execFile('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', psCommand], () => {});
+      execFile('powershell', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', psCommand], () => {});
+    } else if (process.platform === 'darwin') {
+      execFile('osascript', ['-e', `display notification "${cleanMsg}" with title "${cleanTitle}"`], () => {});
+    } else if (process.platform === 'linux') {
+      execFile('notify-send', [cleanTitle, cleanMsg], () => {});
+    }
   } catch (e) {
     // 忽略通知异常，不影响核心流程
   }

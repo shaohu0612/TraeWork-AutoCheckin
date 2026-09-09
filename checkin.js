@@ -139,7 +139,7 @@ function findStorageFile() {
 /**
  * 发送带重试机制的 HTTP 请求
  */
-async function fetchWithRetry(url, options, maxRetries = 5) {
+async function fetchWithRetry(url, options, maxRetries = 8) {
   const fetchFn = typeof fetch === 'function' ? fetch : (typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function' ? globalThis.fetch : null);
   if (!fetchFn) {
     throw new Error('当前环境缺少原生 fetch 支持，请使用 Node.js 18+ 或通过 run_checkin.cmd 运行内置 Trae 运行时。');
@@ -159,8 +159,8 @@ async function fetchWithRetry(url, options, maxRetries = 5) {
       // 9074 代表服务器繁忙/限流，需要延时重试
       if (data.code === 9074) {
         if (attempt < maxRetries) {
-          const delaySec = Math.floor(Math.random() * 15) + 15; // 随机 15~30 秒
-          console.log(`[提示] 服务器繁忙 (Code 9074)，将在 ${delaySec} 秒后进行第 ${attempt}/${maxRetries} 次重试...`);
+          const delaySec = Math.floor(Math.random() * 15) + 12; // 随机 12~26 秒抖动，打散并发
+          console.log(`[提示] 官方服务器繁忙限流 (Code 9074)，将在 ${delaySec} 秒后进行第 ${attempt}/${maxRetries} 次重试...`);
           await sleep(delaySec * 1000);
           continue;
         }
@@ -234,7 +234,7 @@ async function main() {
     method: 'POST',
     headers,
     body: JSON.stringify({})
-  });
+  }, 5);
 
   if (status.code !== 0 && status.code !== undefined) {
     console.log(`[错误] 查询签到状态失败 (Code: ${status.code}): ${status.message || '未知错误'}`);
@@ -263,13 +263,13 @@ async function main() {
     return;
   }
 
-  // 5. 执行签到领取
+  // 5. 执行签到领取（最高重试 8 次，针对 9074 高峰限流自动退避）
   console.log(`[执行] 正在领取今日签到积分 (预计可得 ${totalCredits > 0 ? totalCredits : 200} 积分)...`);
   const claim = await fetchWithRetry(claimUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify({})
-  });
+  }, 8);
 
   if (claim.code === 0) {
     const claimedCredits = claim.data?.credits || totalCredits || 200;
@@ -279,6 +279,15 @@ async function main() {
     console.log(`---------------------------------------------`);
     writeLog(msg);
     showNotification('TraeWork 签到成功', `恭喜！成功领取 ${claimedCredits} 积分！\n官方返回消息: ${claim.message || 'success'}`);
+  } else if (claim.code === 9074) {
+    const msg = `[提示] 官方服务器繁忙限流 (Code: 9074: ${claim.message || '当前参与用户太多，请稍后再试'})。\n` +
+      `       您的登录凭证与设备参数验证完全正常！此现象为官方接口高峰期限流保护。\n` +
+      `       程序已自动重试多次。系统将在下一次开机或定时任务时自动继续签到，您也可稍后再次运行。`;
+    console.log(`---------------------------------------------`);
+    console.log(msg);
+    console.log(`---------------------------------------------`);
+    writeLog(`[限流] Code 9074: ${claim.message || '当前参与用户太多，请稍后再试'}`);
+    showNotification('TraeWork 签到提示', `官方服务器繁忙 (Code 9074)，凭据正常，稍后将自动重试。`);
   } else {
     const msg = `[失败] 签到领取失败 (Code: ${claim.code}): ${claim.message || JSON.stringify(claim)}`;
     console.log(`---------------------------------------------`);

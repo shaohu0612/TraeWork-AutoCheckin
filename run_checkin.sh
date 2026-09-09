@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================
-# TraeWork Daily Auto Check-in Runner (macOS / Linux)
+# TraeWorkCheckin Daily Runner (macOS / Linux)
 # ============================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

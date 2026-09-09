@@ -4,6 +4,10 @@ checkin.log
 log/
 logs/
 
+# 本地技术文档与私有分析（不提交至仓库）
+doc/
+docs/
+
 # 环境变量与私有配置
 .env
 .env.*

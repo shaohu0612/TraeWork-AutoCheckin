@@ -180,7 +180,7 @@ async function fetchWithRetry(url, options, maxRetries = 8) {
 
 async function main() {
   console.log('=============================================');
-  console.log('       TraeWork 每日自动签到程序');
+  console.log('      TraeWorkCheckin 每日自动签到程序');
   console.log('=============================================');
 
   // 1. 查找并读取存储文件
@@ -251,7 +251,7 @@ async function main() {
     console.log(msg);
     console.log(`---------------------------------------------`);
     writeLog(msg);
-    showNotification('TraeWork 签到提示', `今日已完成签到，自动跳过。\n累计获得: ${totalCredits} 积分 (官方消息: ${status.message || 'success'})`);
+    showNotification('TraeWorkCheckin 签到提示', `今日已完成签到，自动跳过。\n累计获得: ${totalCredits} 积分 (官方消息: ${status.message || 'success'})`);
     return;
   }
 
@@ -259,7 +259,7 @@ async function main() {
     const msg = '[提示] 当前签到活动未开启或暂不可用。';
     console.log(msg);
     writeLog(msg);
-    showNotification('TraeWork 签到提示', '当前签到活动未开启或暂不可用。');
+    showNotification('TraeWorkCheckin 签到提示', '当前签到活动未开启或暂不可用。');
     return;
   }
 
@@ -278,7 +278,7 @@ async function main() {
     console.log(msg);
     console.log(`---------------------------------------------`);
     writeLog(msg);
-    showNotification('TraeWork 签到成功', `恭喜！成功领取 ${claimedCredits} 积分！\n官方返回消息: ${claim.message || 'success'}`);
+    showNotification('TraeWorkCheckin 签到成功', `恭喜！成功领取 ${claimedCredits} 积分！\n官方返回消息: ${claim.message || 'success'}`);
   } else if (claim.code === 9074) {
     const msg = `[提示] 官方服务器繁忙限流 (Code: 9074: ${claim.message || '当前参与用户太多，请稍后再试'})。\n` +
       `       您的登录凭证与设备参数验证完全正常！此现象为官方接口高峰期限流保护。\n` +
@@ -287,14 +287,14 @@ async function main() {
     console.log(msg);
     console.log(`---------------------------------------------`);
     writeLog(`[限流] Code 9074: ${claim.message || '当前参与用户太多，请稍后再试'}`);
-    showNotification('TraeWork 签到提示', `官方服务器繁忙 (Code 9074)，凭据正常，稍后将自动重试。`);
+    showNotification('TraeWorkCheckin 签到提示', `官方服务器繁忙 (Code 9074)，凭据正常，稍后将自动重试。`);
   } else {
     const msg = `[失败] 签到领取失败 (Code: ${claim.code}): ${claim.message || JSON.stringify(claim)}`;
     console.log(`---------------------------------------------`);
     console.log(msg);
     console.log(`---------------------------------------------`);
     writeLog(msg);
-    showNotification('TraeWork 签到失败', `签到失败 (Code: ${claim.code})\n原因: ${claim.message || '未知错误'}`);
+    showNotification('TraeWorkCheckin 签到失败', `签到失败 (Code: ${claim.code})\n原因: ${claim.message || '未知错误'}`);
   }
 }
 
@@ -332,7 +332,7 @@ function showNotification(title, message) {
           $textNodes = $template.GetElementsByTagName("text")
           $textNodes.Item(0).AppendChild($template.CreateTextNode("${cleanTitle}")) > $null
           $textNodes.Item(1).AppendChild($template.CreateTextNode("${cleanMsg}")) > $null
-          $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TraeWork")
+          $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TraeWorkCheckin")
           $notification = [Windows.UI.Notifications.ToastNotification]::new($template)
           $notifier.Show($notification)
         } catch {

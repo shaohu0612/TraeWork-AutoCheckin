@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ====================================================
-# TraeWork 每日自动签到 - 开机自启管理 (macOS / Linux 交互式)
+# TraeWorkCheckin - 开机自启管理 (macOS / Linux 交互式)
 # ====================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,8 +10,13 @@ install_macos() {
   echo ""
   echo "[正在处理] 正在配置 macOS LaunchAgent 自启任务..."
   PLIST_DIR="$HOME/Library/LaunchAgents"
-  PLIST_FILE="$PLIST_DIR/com.traework.autocheckin.plist"
+  PLIST_FILE="$PLIST_DIR/com.traework.checkin.plist"
+  OLD_PLIST_FILE="$PLIST_DIR/com.traework.autocheckin.plist"
   mkdir -p "$PLIST_DIR"
+
+  # 清理旧版配置
+  launchctl unload "$OLD_PLIST_FILE" 2>/dev/null || true
+  rm -f "$OLD_PLIST_FILE" 2>/dev/null || true
 
   cat <<EOF > "$PLIST_FILE"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -19,7 +24,7 @@ install_macos() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.traework.autocheckin</string>
+    <string>com.traework.checkin</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
@@ -45,10 +50,20 @@ EOF
 uninstall_macos() {
   echo ""
   echo "[正在处理] 正在清理 macOS LaunchAgent 自启任务..."
-  PLIST_FILE="$HOME/Library/LaunchAgents/com.traework.autocheckin.plist"
+  PLIST_FILE="$HOME/Library/LaunchAgents/com.traework.checkin.plist"
+  OLD_PLIST_FILE="$HOME/Library/LaunchAgents/com.traework.autocheckin.plist"
+  removed=0
   if [ -f "$PLIST_FILE" ]; then
     launchctl unload "$PLIST_FILE" 2>/dev/null || true
     rm -f "$PLIST_FILE"
+    removed=1
+  fi
+  if [ -f "$OLD_PLIST_FILE" ]; then
+    launchctl unload "$OLD_PLIST_FILE" 2>/dev/null || true
+    rm -f "$OLD_PLIST_FILE"
+    removed=1
+  fi
+  if [ "$removed" -eq 1 ]; then
     echo "[成功] 已成功移除 LaunchAgent 服务。"
   else
     echo "[提示] 未检测到已配置的 LaunchAgent 服务。"
@@ -60,15 +75,17 @@ install_linux() {
   echo ""
   echo "[正在处理] 正在配置 Linux XDG 桌面自启条目..."
   AUTOSTART_DIR="$HOME/.config/autostart"
-  DESKTOP_FILE="$AUTOSTART_DIR/traework_autocheckin.desktop"
+  DESKTOP_FILE="$AUTOSTART_DIR/traework_checkin.desktop"
+  OLD_DESKTOP_FILE="$AUTOSTART_DIR/traework_autocheckin.desktop"
   mkdir -p "$AUTOSTART_DIR"
+  rm -f "$OLD_DESKTOP_FILE" 2>/dev/null || true
 
   cat <<EOF > "$DESKTOP_FILE"
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=TraeWork Auto Check-in
-Comment=TraeWork Daily Auto Check-in
+Name=TraeWorkCheckin
+Comment=TraeWorkCheckin Daily Auto Check-in
 Exec=/bin/bash "$RUNNER" --silent
 Terminal=false
 Hidden=false
@@ -83,9 +100,18 @@ EOF
 uninstall_linux() {
   echo ""
   echo "[正在处理] 正在清理 Linux 桌面自启条目..."
-  DESKTOP_FILE="$HOME/.config/autostart/traework_autocheckin.desktop"
+  DESKTOP_FILE="$HOME/.config/autostart/traework_checkin.desktop"
+  OLD_DESKTOP_FILE="$HOME/.config/autostart/traework_autocheckin.desktop"
+  removed=0
   if [ -f "$DESKTOP_FILE" ]; then
     rm -f "$DESKTOP_FILE"
+    removed=1
+  fi
+  if [ -f "$OLD_DESKTOP_FILE" ]; then
+    rm -f "$OLD_DESKTOP_FILE"
+    removed=1
+  fi
+  if [ "$removed" -eq 1 ]; then
     echo "[成功] 已成功移除自启桌面文件。"
   else
     echo "[提示] 未检测到已安装的自启条目。"
@@ -168,8 +194,8 @@ trap 'tput cnorm 2>/dev/null || true; exit 0' EXIT INT TERM
 render_menu() {
   clear
   echo -e "\033[1;36m====================================================\033[0m"
-  echo -e "\033[1;36m       TraeWork 每日自动签到 - 开机自启管理\033[0m"
-  echo -e "\033[1;36m       操作系统: $(uname -s)\033[0m"
+  echo -e "\033[1;36m         TraeWorkCheckin - 开机自启管理\033[0m"
+  echo -e "\033[1;36m         操作系统: $(uname -s)\033[0m"
   echo -e "\033[1;36m====================================================\033[0m"
   echo -e "\033[90m  提示：使用键盘 [↑ / ↓] 键移动光标，按 [Enter] 确认选择\033[0m"
   echo -e "\033[90m        亦可直接按下对应数字键 [1 / 2 / 3 / 0] 快速选择\033[0m"

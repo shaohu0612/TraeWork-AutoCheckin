@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 :: ============================================
-:: TraeWork Daily Auto Check-in Runner
+:: TraeWorkCheckin Daily Runner
 :: ============================================
 
 set "SCRIPT_PATH=%~dp0checkin.js"

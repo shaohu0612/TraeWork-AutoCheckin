@@ -1,5 +1,5 @@
-﻿# ====================================================
-# TraeWork 每日自动签到 - 开机自启管理 (PowerShell 交互式)
+# ====================================================
+# TraeWorkCheckin - 开机自启管理 (PowerShell 交互式)
 # ====================================================
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -17,7 +17,11 @@ function Invoke-InstallTask {
     param([bool]$interactive = $true)
     $ws = New-Object -ComObject WScript.Shell
     $s = [Environment]::GetFolderPath('Startup')
-    $p = Join-Path $s 'TraeWorkAutoCheckin.lnk'
+    # 先清理可能存在的旧版本快捷方式
+    $oldP = Join-Path $s 'TraeWorkAutoCheckin.lnk'
+    if (Test-Path $oldP) { Remove-Item $oldP -Force -ErrorAction SilentlyContinue }
+
+    $p = Join-Path $s 'TraeWorkCheckin.lnk'
     $lnk = $ws.CreateShortcut($p)
     $lnk.TargetPath = Join-Path $scriptDir 'run_checkin.cmd'
     $lnk.Arguments = '--silent'
@@ -43,14 +47,24 @@ function Invoke-InstallTask {
 function Invoke-UninstallTask {
     param([bool]$interactive = $true)
     $dir = [Environment]::GetFolderPath('Startup')
-    $p = Join-Path $dir 'TraeWorkAutoCheckin.lnk'
+    $p = Join-Path $dir 'TraeWorkCheckin.lnk'
+    $oldP = Join-Path $dir 'TraeWorkAutoCheckin.lnk'
     Write-Host ""
+    $removed = $false
     if (Test-Path $p) {
         Remove-Item $p -Force
+        $removed = $true
+    }
+    if (Test-Path $oldP) {
+        Remove-Item $oldP -Force
+        $removed = $true
+    }
+    if ($removed) {
         Write-Host "[成功] 已成功移除开机启动快捷方式！" -ForegroundColor Green
     } else {
         Write-Host "[提示] 未检测到已安装的开机启动快捷方式。" -ForegroundColor Yellow
     }
+    Unregister-ScheduledTask -TaskName 'TraeWorkCheckin' -Confirm:$false -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName 'TraeWorkAutoCheckin' -Confirm:$false -ErrorAction SilentlyContinue
     Write-Host "[完成] 开机自启配置已全部清理干净。" -ForegroundColor Green
     if ($interactive) {
@@ -103,7 +117,7 @@ function Render-Menu {
     param([int]$curIndex)
     Clear-Host
     Write-Host "====================================================" -ForegroundColor Cyan
-    Write-Host "       TraeWork 每日自动签到 - 开机自启管理" -ForegroundColor Cyan
+    Write-Host "         TraeWorkCheckin - 开机自启管理" -ForegroundColor Cyan
     Write-Host "====================================================" -ForegroundColor Cyan
     Write-Host "  提示：使用键盘 [↑ / ↓] 键移动光标，按 [Enter] 确认选择" -ForegroundColor DarkGray
     Write-Host "        亦可直接按下对应数字键 [1 / 2 / 3 / 0] 快速选择" -ForegroundColor DarkGray

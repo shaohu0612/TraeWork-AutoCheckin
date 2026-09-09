@@ -300,7 +300,11 @@ async function main() {
 
 function writeLog(text) {
   try {
-    const logFile = path.join(__dirname, 'checkin.log');
+    const logDir = path.join(__dirname, 'log');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, 'checkin.log');
     const now = new Date();
     const pad = n => String(n).padStart(2, '0');
     const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;

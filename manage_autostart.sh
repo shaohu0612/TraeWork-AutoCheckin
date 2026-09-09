@@ -29,9 +29,9 @@ install_macos() {
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$SCRIPT_DIR/checkin.log</string>
+    <string>$SCRIPT_DIR/log/checkin.log</string>
     <key>StandardErrorPath</key>
-    <string>$SCRIPT_DIR/checkin.log</string>
+    <string>$SCRIPT_DIR/log/checkin.log</string>
 </dict>
 </plist>
 EOF

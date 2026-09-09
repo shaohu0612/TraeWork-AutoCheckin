@@ -147,8 +147,8 @@ async function fetchWithRetry(url, options, maxRetries = 8) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 15 秒请求超时保护，避免网络堵塞导致进程永久挂起
-      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined;
+      // 30 秒请求超时保护（与 Trae 官方客户端底层网络超时 30000ms 严格保持一致）
+      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30000) : undefined;
       const requestOptions = signal ? { ...options, signal } : options;
       const res = await fetchFn(url, requestOptions);
       if (res.status === 429 || res.status >= 500) {
@@ -168,8 +168,8 @@ async function fetchWithRetry(url, options, maxRetries = 8) {
       return data;
     } catch (err) {
       if (attempt < maxRetries) {
-        const delaySec = 5 * attempt;
-        console.log(`[提示] 请求异常 (${err.message})，将在 ${delaySec} 秒后重试 (${attempt}/${maxRetries})...`);
+        const delaySec = 3 * attempt;
+        console.log(`[提示] 网络连接抖动 (${err.message})，将在 ${delaySec} 秒后进行第 ${attempt}/${maxRetries} 次重试...`);
         await sleep(delaySec * 1000);
       } else {
         throw err;
